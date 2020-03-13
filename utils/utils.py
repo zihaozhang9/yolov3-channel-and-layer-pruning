@@ -171,15 +171,15 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
             p.append(0)
         else:
             # Accumulate FPs and TPs
-            fpc = (1 - tp[i]).cumsum()
-            tpc = (tp[i]).cumsum()
+            fpc = (1 - tp[i]).cumsum() #假正例；预测结果中预测错的 ；tp中预测对的被标记1，
+            tpc = (tp[i]).cumsum()     #真正例；预测结果中预测对的
 
             # Recall
-            recall = tpc / (n_gt + 1e-16)  # recall curve
+            recall = tpc / (n_gt + 1e-16)  # recall curve #真正例/实际正例总数
             r.append(recall[-1])
 
             # Precision
-            precision = tpc / (tpc + fpc)  # precision curve
+            precision = tpc / (tpc + fpc)  # precision curve #真正例/所有预测结果(预测正例)
             p.append(precision[-1])
 
             # AP from recall-precision curve
@@ -213,8 +213,8 @@ def compute_ap(recall, precision):
     """
 
     # Append sentinel values to beginning and end
-    mrec = np.concatenate(([0.], recall, [min(recall[-1] + 1E-3, 1.)]))
-    mpre = np.concatenate(([0.], precision, [0.]))
+    mrec = np.concatenate(([0.], recall, [min(recall[-1] + 1E-3, 1.)])) #在recall最前面添加个0，最后添加个1
+    mpre = np.concatenate(([0.], precision, [0.])) #在precision前面添加个0，最后添加个0
 
     # Compute the precision envelope
     for i in range(mpre.size - 1, 0, -1):
@@ -224,7 +224,9 @@ def compute_ap(recall, precision):
     method = 'interp'  # methods: 'continuous', 'interp'
     if method == 'interp':
         x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
-        ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate
+        #np.interp 横坐标为mrec，纵坐标为mpre，在横坐标x处的一维线性插值； https://blog.csdn.net/hfutdog/article/details/87386901 
+        #np.trapz 阶梯的积分 https://docs.scipy.org/doc/numpy/reference/generated/numpy.trapz.html
+        ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate #就是面积，ap计算出来了
     else:  # 'continuous'
         i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x axis (recall) changes
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
