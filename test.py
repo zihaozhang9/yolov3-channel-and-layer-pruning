@@ -62,7 +62,7 @@ def test(cfg,
     loss = torch.zeros(3)
     jdict, stats, ap, ap_class = [], [], [], []
     for batch_i, (imgs, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
-        targets = targets.to(device)
+        targets = targets.to(device) #targets.shape [目标数,6]：第一列代表batch的图像索引，后面是class,xywh
         imgs = imgs.to(device)
         _, _, height, width = imgs.shape  # batch size, channels, height, width
 
@@ -79,15 +79,16 @@ def test(cfg,
 
         # Run NMS
         output = non_max_suppression(inf_out, conf_thres=conf_thres, nms_thres=nms_thres)
-
+        #output是一个list;list的长度为batch;每个list存储的是一张图片的输出；output[0].shape [num,7] xywh 置信度，类别置信度，类别
+         
         # Statistics per image
-        for si, pred in enumerate(output):
+        for si, pred in enumerate(output): #对每张图片进行操作，si代表图像号
             labels = targets[targets[:, 0] == si, 1:]
-            nl = len(labels)
-            tcls = labels[:, 0].tolist() if nl else []  # target class
-            seen += 1
+            nl = len(labels) #nl代表，这张图片中存在的目标个数
+            tcls = labels[:, 0].tolist() if nl else []  # target class#目标类别
+            seen += 1 #所有图片个数
 
-            if pred is None:
+            if pred is None: #如果没预测出来，则添加空，并返回
                 if nl:
                     stats.append(([], torch.Tensor(), torch.Tensor(), tcls))
                 continue
@@ -97,7 +98,7 @@ def test(cfg,
             #    [file.write('%11.5g' * 7 % tuple(x) + '\n') for x in pred]
 
             # Append to pycocotools JSON dictionary
-            if save_json:
+            if save_json: #False
                 # [{"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}, ...
                 image_id = int(Path(paths[si]).stem.split('_')[-1])
                 box = pred[:, :4].clone()  # xyxy
@@ -111,24 +112,25 @@ def test(cfg,
                                   'score': floatn(d[4], 5)})
 
             # Clip boxes to image bounds
-            clip_coords(pred, (height, width))
+            clip_coords(pred, (height, width)) #将输出的x1y1x2y2 加载宽高中；同x = max(x,w)
 
             # Assign all predictions as incorrect
             correct = [0] * len(pred)
-            if nl:
+            if nl:#如果label有物体
                 detected = []
                 tcls_tensor = labels[:, 0]
 
                 # target boxes
-                tbox = xywh2xyxy(labels[:, 1:5])
+                tbox = xywh2xyxy(labels[:, 1:5]) #标签的xywh转成x1y1x2xy
                 tbox[:, [0, 2]] *= width
-                tbox[:, [1, 3]] *= height
+                tbox[:, [1, 3]] *= height#并乘wh恢复原尺寸
 
                 # Search for correct predictions
                 for i, (*pbox, pconf, pcls_conf, pcls) in enumerate(pred):
+                    # pbox 目标框xyxy，框置信度，类别置信度，预测类别
 
                     # Break if all targets already located in image
-                    if len(detected) == nl:
+                    if len(detected) == nl:#只拿pred的前nl个预测结果？
                         break
 
                     # Continue if predicted class not among image classes
@@ -136,16 +138,16 @@ def test(cfg,
                         continue
 
                     # Best iou, index between pred and targets
-                    m = (pcls == tcls_tensor).nonzero().view(-1)
-                    iou, bi = bbox_iou(pbox, tbox[m]).max(0)
+                    m = (pcls == tcls_tensor).nonzero().view(-1) #找到了预测类别 等于 label中类别的 索引号
+                    iou, bi = bbox_iou(pbox, tbox[m]).max(0) # iou最大的iou值 和 iou索引
 
                     # If iou > threshold and class is correct mark as correct
-                    if iou > iou_thres and m[bi] not in detected:  # and pcls == tcls[bi]:
-                        correct[i] = 1
-                        detected.append(m[bi])
+                    if iou > iou_thres and m[bi] not in detected:  # and pcls == tcls[bi]:# 如果大于iou阈值，并且没有被预测过
+                        correct[i] = 1#用1表示预测结果正确
+                        detected.append(m[bi])#保存，这个物体已经被预测，索引存放在detected
 
             # Append statistics (correct, conf, pcls, tcls)
-            stats.append((correct, pred[:, 4].cpu(), pred[:, 6].cpu(), tcls))
+            stats.append((correct, pred[:, 4].cpu(), pred[:, 6].cpu(), tcls)) #添加预测结果
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in list(zip(*stats))]  # to numpy
