@@ -43,7 +43,7 @@ if __name__ == '__main__':
     origin_nparameters = obtain_num_parameters(model)
 
 
-    CBL_idx, Conv_idx, shortcut_idx = parse_module_defs4(model.module_defs)
+    CBL_idx, Conv_idx, shortcut_idx = parse_module_defs4(model.module_defs) #shortcut_idx是shortcut层前面的卷积层
     print('all shortcut_idx:', [i + 1 for i in shortcut_idx])
 
 
@@ -61,17 +61,17 @@ if __name__ == '__main__':
     bn_mean = torch.zeros(len(shortcut_idx))
     for i, idx in enumerate(shortcut_idx):
         bn_mean[i] = model.module_list[idx][1].weight.data.abs().mean().clone()
-    _, sorted_index_thre = torch.sort(bn_mean)
+    _, sorted_index_thre = torch.sort(bn_mean) #sort 升序排列
     
     
-    prune_shortcuts = torch.tensor(shortcut_idx)[[sorted_index_thre[:opt.shortcuts]]]
-    prune_shortcuts = [int(x) for x in prune_shortcuts]
+    prune_shortcuts = torch.tensor(shortcut_idx)[[sorted_index_thre[:opt.shortcuts]]] #获取bn较小的前12个 shortcut层id号
+    prune_shortcuts = [int(x) for x in prune_shortcuts] #转为list
 
     index_all = list(range(len(model.module_defs)))
     index_prune = []
     for idx in prune_shortcuts:
-        index_prune.extend([idx - 1, idx, idx + 1])
-    index_remain = [idx for idx in index_all if idx not in index_prune]
+        index_prune.extend([idx - 1, idx, idx + 1])# shorcut前面两层和short层都被剪
+    index_remain = [idx for idx in index_all if idx not in index_prune] #剩下的保留
 
     print('These shortcut layers and corresponding CBL will be pruned :', index_prune)
 
@@ -105,12 +105,12 @@ if __name__ == '__main__':
     def obtain_filters_mask(model, CBL_idx, prune_shortcuts):
 
         filters_mask = []
-        for idx in CBL_idx:
+        for idx in CBL_idx: #相当于先初始化，所有的conv层的mask都为1
             bn_module = model.module_list[idx][1]
             mask = np.ones(bn_module.weight.data.shape[0], dtype='float32')
             filters_mask.append(mask.copy())
         CBLidx2mask = {idx: mask for idx, mask in zip(CBL_idx, filters_mask)}
-        for idx in prune_shortcuts:
+        for idx in prune_shortcuts: #要剪枝的shorcuts层，mask为0
             for i in [idx, idx - 1]:
                 bn_module = model.module_list[i][1]
                 mask = np.zeros(bn_module.weight.data.shape[0], dtype='float32')
@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
 
 
-    pruned_model = prune_model_keep_size2(model, CBL_idx, CBL_idx, CBLidx2mask)
+    pruned_model = prune_model_keep_size2(model, CBL_idx, CBL_idx, CBLidx2mask) #剪枝层bn剪枝，更新bias
 
     with torch.no_grad():
         mAP = eval_model(pruned_model)[0][2]
@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
 
     for module_def in compact_module_defs:
-        if module_def['type'] == 'route':
+        if module_def['type'] == 'route':#因为有些层被去除了，所以route的层号也要更新
             from_layers = [int(s) for s in module_def['layers'].split(',')]
             if len(from_layers) == 2:
                 count = 0
@@ -145,11 +145,11 @@ if __name__ == '__main__':
                 module_def['layers'] = from_layers
 
     compact_module_defs = [compact_module_defs[i] for i in index_remain]
-    compact_model = Darknet([model.hyperparams.copy()] + compact_module_defs, (img_size, img_size)).to(device)
-    for i, index in enumerate(index_remain):
+    compact_model = Darknet([model.hyperparams.copy()] + compact_module_defs, (img_size, img_size)).to(device) #重新构造新网络，
+    for i, index in enumerate(index_remain): #复制保留的卷积层
         compact_model.module_list[i] = pruned_model.module_list[index]
 
-    compact_nparameters = obtain_num_parameters(compact_model)
+    compact_nparameters = obtain_num_parameters(compact_model) #计算参数量
 
     # init_weights_from_loose_model(compact_model, pruned_model, CBL_idx, Conv_idx, CBLidx2mask)
 
