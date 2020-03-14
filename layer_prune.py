@@ -146,15 +146,15 @@ if __name__ == '__main__':
 
     compact_module_defs = [compact_module_defs[i] for i in index_remain]
     compact_model = Darknet([model.hyperparams.copy()] + compact_module_defs, (img_size, img_size)).to(device) #重新构造新网络，
-    for i, index in enumerate(index_remain): #复制保留的卷积层
+    for i, index in enumerate(index_remain): #复制保留的卷积层 # 因为这一层没有通道被去掉，因此可以直接整层拷贝
         compact_model.module_list[i] = pruned_model.module_list[index]
 
     compact_nparameters = obtain_num_parameters(compact_model) #计算参数量
 
-    # init_weights_from_loose_model(compact_model, pruned_model, CBL_idx, Conv_idx, CBLidx2mask)
+    # init_weights_from_loose_model(compact_model, pruned_model, CBL_idx, Conv_idx, CBLidx2mask) #刚才拷贝了，就不用mask拷贝了
 
 
-    random_input = torch.rand((1, 3, img_size, img_size)).to(device)
+    random_input = torch.rand((1, 3, img_size, img_size)).to(device) #随机个tensor计算速度
 
     def obtain_avg_forward_time(input, model, repeat=200):
 
