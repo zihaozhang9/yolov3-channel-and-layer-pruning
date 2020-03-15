@@ -70,8 +70,8 @@ def test(cfg,
         if batch_i == 0 and not os.path.exists('test_batch0.jpg'):
             plot_images(imgs=imgs, targets=targets, paths=paths, fname='test_batch0.jpg')
 
-        # Run model
-        inf_out, train_out = model(imgs)  # inference and training outputs
+        # Run model #inf_out这里输出的85个数代表 xywh框置信度 后面80个类别置信度；xywh是像素值，不是坐标比例
+        inf_out, train_out = model(imgs)  # inference and training outputs #inf_out.shape [batch,yolo层输出格式,85] 
 
         # Compute loss
         if hasattr(model, 'hyp'):  # if model has loss hyperparameters
